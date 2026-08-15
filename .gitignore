@@ -1,1 +1,3 @@
 data/
+self-host/
+__pycache__/
