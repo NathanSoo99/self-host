@@ -1,43 +1,130 @@
 import sqlite3
 from . import db_filename
+from database_access import db_connect
 
-def get_directory():
-    pass
+def get_directory_id(virtual_path, cursor):
+    directory_chain = virtual_path.split("/")[1::]
+    parent_directory = None
 
-def create_directory(parent_id, name):
-    try:
-        conn = sqlite3.connect(db_filename)
-    except sqlite3.OperationalError as e:
-        print(f"Unable to connect to Database - {e}")
+    # traverse path to find directory id
+    for directory in directory_chain:
+        query = """
+            SELECT id, parent_id, name
+            FROM Directories
+            WHERE name = :directory AND parent_id = :parent_id
+        """
+        query_parameters = {
+            "directory": directory,
+            "parent_id": parent_directory
+        }
+        cursor.execute(query, query_parameters)
+        query_result = cursor.fetchone()
+        if query_result is None:
+            parent_directory = None
+            break
+        else:
+            parent_directory = query_result[0]
+
+    return parent_directory
+    
+
+def get_directory(virtual_path):
+    conn = db_connect(db_filename)
+    if conn is None:
+        return None
+
+    cursor = conn.cursor()
+
+    directory_id = get_directory_id(virtual_path, cursor)
+
+    if directory_id is not None:
+        results = {
+            "directories": [],
+            "files": []
+        }
+        query = "SELECT name FROM Directories WHERE parent_id = :parent_id"
+        query_parameters = {"parent_id": directory_id}
+        cursor.execute(query, query_parameters)
+        query_results = cursor.fetchall()
+        for query_result in query_results:
+            results["directories"].append(query_result[0])
+
+        query = "SELECT name FROM Files WHERE directory_id = :directory_id"
+        query_parameters = {"directory_id": directory_id}
+        cursor.execute(query, query_parameters)
+        query_results = cursor.fetchall()
+        for query_result in query_results:
+            results["files"].append(query_result[0])
+
+    cursor.close()
+    conn.close()
+
+    return results
+
+def create_directory(virtual_path, name):
+    conn = db_connect(db_filename)
+    if conn is None:
         return None
 
     conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
 
-    try:
-        query = "INSERT INTO Directories (parent_id, name) VALUES (:parent_id, :name) RETURNING *"
-        query_parameters = {"parent_id": parent_id, "name": name}
-        cursor.execute(query, query_parameters)
-        result = cursor.fetchone()
-    except sqlite3.IntegrityError as e:
-        print(f"Integrity Error - {e}")
-        cursor.close()
-        conn.close()
-        return None
+    result = None
+    directory_id = get_directory_id(virtual_path, cursor)
+
+    if directory_id is not None:
+        try:
+            query = "INSERT INTO Directories (parent_id, name) VALUES (:parent_id, :name) RETURNING *"
+            query_parameters = {"parent_id": directory_id, "name": name}
+            cursor.execute(query, query_parameters)
+            result = cursor.fetchone()
+        except sqlite3.IntegrityError as e:
+            print(f"Integrity Error - {e}")
+            result = None
 
     cursor.close()
-    conn.commit()
+    if result is not None: conn.commit()
     conn.close()
 
     return result
 
-        
-    
-    
+def modify_directory(virtual_path, old_name, new_name):
+    conn = db_connect(db_filename)
+    if conn is None:
+        return None
 
+    cursor = conn.cursor()
 
-def modify_directory():
-    pass
+    result = None
+    directory_id = get_directory_id(virtual_path, cursor)
+
+    if directory_id is not None:
+        try:
+            query = """
+                UPDATE Directories
+                SET name = :new_name
+                WHERE parent_id = :parent_id and name = :old_name
+                RETURNING *
+            """
+            query_parameters = {
+                "new_name": new_name,
+                "old_name": old_name,
+                "parent_id": directory_id
+            }
+            cursor.execute(query, query_parameters)
+            query_results = cursor.fetchall()
+            if len(query_results) == 1:
+                result = query_results[0]
+        except sqlite3.IntegrityError as e:
+            print(f"Integrity Error - {e}")
+            result = None
+
+    cursor.close()
+    if result is not None: conn.commit()
+    conn.close()
+
+    return result
+
 
 def delete_directory():
     pass

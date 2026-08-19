@@ -23,8 +23,9 @@ if __name__ == "__main__":
         query = """CREATE TABLE IF NOT EXISTS Directories (
             id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
             parent_id INTEGER,
-            name TEXT NOT NULL CHECK(length(name) <= 20),
+            name TEXT NOT NULL CHECK(length(name) <= 100),
             FOREIGN KEY (parent_id) REFERENCES Directories(id)
+            UNIQUE (parent_id, name)
         )"""
         cursor.execute(query)
         query = """CREATE TABLE IF NOT EXISTS Files (
@@ -37,7 +38,7 @@ if __name__ == "__main__":
         )"""
         cursor.execute(query)
         print("Tables Created")
-        cursor.execute("INSERT INTO Directories (name) VALUES ('root') RETURNING *")
+        cursor.execute("INSERT INTO Directories (name) VALUES ('~') RETURNING *")
         result = cursor.fetchone()
         print(f"Virtual Root Directory Created - id: {result[0]}")
 
@@ -48,9 +49,4 @@ if __name__ == "__main__":
     except sqlite3.Error as e:
         print(f"An Error Occurred - {e}")
         exit()
-
-    result = create_directory(1, "dir1")
-    print(result)
-    result = create_directory(1, "dir2adsfadsfadsfsafadsfafasfadsfsafadsfdsafasfdsa")
-    print(result)
     #app.run()
