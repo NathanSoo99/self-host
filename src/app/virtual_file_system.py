@@ -1,11 +1,11 @@
 import sqlite3
+import uuid
 from . import db_filename
 from .database_access import db_connect
 from collections import deque
 
-def get_directory_id(virtual_path, cursor):
-    directory_chain = virtual_path.split("/")
-    parent_directory = None
+def traverse_directories(directory_chain, cursor):
+    current_directory = None
 
     # traverse path to find directory id
     for directory in directory_chain:
@@ -17,18 +17,41 @@ def get_directory_id(virtual_path, cursor):
         """
         query_parameters = {
             "directory": directory,
-            "parent_id": parent_directory
+            "parent_id": current_directory
         }
         cursor.execute(query, query_parameters)
         query_result = cursor.fetchone()
-        print(query_result)
         if query_result is None:
-            parent_directory = None
+            current_directory = None
             break
         else:
-            parent_directory = query_result[0]
+            current_directory = query_result[0]
 
-    return parent_directory
+    return current_directory
+
+def get_directory_id(virtual_path, cursor):
+    return traverse_directories(virtual_path.split("/"), cursor)
+
+def get_file_metadata(virtual_path, cursor):
+    path_parts = virtual_path.split("/")
+    directory_chain = path_parts[0:-1]
+    filename = path_parts[-1]
+    result = None
+
+    directory_id = traverse_directories(directory_chain, cursor)
+    if directory_id is not None:
+        query = "SELECT id, name, uuid FROM Files WHERE name = :filename AND directory_id = :directory_id"
+        query_parameters = {"filename": filename, "directory_id": directory_id}
+        cursor.execute(query, query_parameters)
+        query_result = cursor.fetchone()
+        if query_result is not None:
+            result = {
+                "id": query_result[0],
+                "name": query_result[1],
+                "uuid": query_result[2]
+            }
+
+    return result
     
 
 def get_directory(virtual_path):
@@ -195,15 +218,85 @@ def get_file(path):
     conn = db_connect(db_filename)
     if conn is None:
         return None
+    
+    result = None
 
     cursor = conn.cursor()
+    file_metadata = get_file_metadata(path, cursor)
+    if file_metadata is not None:
+        result = file_metadata
+
+    cursor.close()
+    conn.close()
+    return result
+
+def add_file(directory_path, filename, content):
+    conn = db_connect(db_filename)
+    if conn is None:
+        return None
+    
+    result = False
+    cursor = conn.cursor()
+    directory_id = get_directory_id(directory_path, cursor)
+    if directory_id is not None:
+        file_identifier = uuid.uuid4().bytes
+        # TODO write content to physical disk with file identifier
+        print(content)
+        query = "INSERT INTO Files (directory_id, name, uuid) VALUES (:directory_id, :name, :uuid) RETURNING *"
+        query_data = {
+            "directory_id": directory_id,
+            "name": filename,
+            "uuid": file_identifier
+        }
+        cursor.execute(query, query_data)
+        result = True
+
+    cursor.close()
+    conn.commit()
+    conn.close()
+
+    return result
 
 
-def add_file():
-    pass
+def modify_file_content(path, new_content):
+    conn = db_connect(db_filename)
+    if conn is None:
+        return None
+    
+    result = False
+    cursor = conn.cursor()
+    file_metadata = get_file_metadata(path, cursor)
+    if file_metadata is not None:
+        print(new_content)
+        result = True
+        
+    cursor.close()
+    conn.commit()
+    conn.close()
+    return result
 
-def modify_file():
-    pass
+def modify_file_name(path, new_name):
+    conn = db_connect(db_filename)
+    if conn is None:
+        return None
+    result = False
+    cursor = conn.cursor()
+    file_metadata = get_file_metadata(path, cursor)
+    if file_metadata is not None:
+        query = """
+            UPDATE Files
+            SET name = :new_name
+            WHERE id = :file_id
+        """
+        query_parameters = {
+            "new_name": new_name,
+            "file_id": file_metadata["id"]
+        }
+        cursor.execute(query, query_parameters)
+    cursor.close()
+    conn.commit()
+    conn.close()
+    return result
 
 def delete_file():
     pass
