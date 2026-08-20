@@ -1,5 +1,5 @@
 from app import app, db_filename
-from app.virtual_file_system import create_directory
+from app.virtual_file_system import get_directory, create_directory
 
 import sqlite3
 
@@ -49,4 +49,16 @@ if __name__ == "__main__":
     except sqlite3.Error as e:
         print(f"An Error Occurred - {e}")
         exit()
-    #app.run()
+
+    while True:
+        cwd = "~"
+        cmd = input(f"{cwd}$ ")
+
+        args = cmd.split(" ")
+
+        if args[0] == "ls":
+            print(get_directory(cwd))
+        elif args[0] == "mkdir":
+            create_directory(cwd, args[1])
+        else:
+            print("invalid command")

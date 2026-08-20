@@ -1,9 +1,10 @@
 import sqlite3
 from . import db_filename
-from database_access import db_connect
+from .database_access import db_connect
+from collections import deque
 
 def get_directory_id(virtual_path, cursor):
-    directory_chain = virtual_path.split("/")[1::]
+    directory_chain = virtual_path.split("/")
     parent_directory = None
 
     # traverse path to find directory id
@@ -11,7 +12,8 @@ def get_directory_id(virtual_path, cursor):
         query = """
             SELECT id, parent_id, name
             FROM Directories
-            WHERE name = :directory AND parent_id = :parent_id
+            WHERE name = :directory
+            AND (parent_id = :parent_id OR (parent_id IS NULL AND :parent_id IS NULL))
         """
         query_parameters = {
             "directory": directory,
@@ -19,6 +21,7 @@ def get_directory_id(virtual_path, cursor):
         }
         cursor.execute(query, query_parameters)
         query_result = cursor.fetchone()
+        print(query_result)
         if query_result is None:
             parent_directory = None
             break
@@ -36,12 +39,12 @@ def get_directory(virtual_path):
     cursor = conn.cursor()
 
     directory_id = get_directory_id(virtual_path, cursor)
+    results = {
+        "directories": [],
+        "files": []
+    }
 
     if directory_id is not None:
-        results = {
-            "directories": [],
-            "files": []
-        }
         query = "SELECT name FROM Directories WHERE parent_id = :parent_id"
         query_parameters = {"parent_id": directory_id}
         cursor.execute(query, query_parameters)
@@ -55,6 +58,8 @@ def get_directory(virtual_path):
         query_results = cursor.fetchall()
         for query_result in query_results:
             results["files"].append(query_result[0])
+    else:
+        results = None
 
     cursor.close()
     conn.close()
@@ -126,11 +131,73 @@ def modify_directory(virtual_path, old_name, new_name):
     return result
 
 
-def delete_directory():
-    pass
+def delete_directory(virtual_path):
+    conn = db_connect(db_filename)
+    if conn is None:
+        return None
 
-def get_file():
-    pass
+    cursor = conn.cursor()
+
+    result = True
+    directory_id = get_directory_id(virtual_path, cursor)
+
+    if directory_id is not None:
+        directories_to_delete = []
+        files_to_delete = []
+        queue = deque()
+
+        # Mark Directory, Sub-directories and Sub-files for deletion
+        queue.append(directory_id)
+        directories_to_delete.append(directory_id)
+        while len(queue) != 0:
+            node_id = queue.popleft()
+            query = "SELECT id FROM Directories WHERE parent_id = :parent_id"
+            query_parameters = {"parent_id": node_id}
+            cursor.execute(query, query_parameters)
+            query_results = cursor.fetchall()
+            for query_result in query_results:
+                queue.append(query_result[0])
+                directories_to_delete.append(query_result[0])
+
+            query = "SELECT id, uuid FROM Files WHERE directory_id = :parent_id"
+            cursor.execute(query, query_parameters)
+            query_results = cursor.fetchall()
+            for query_result in query_results:
+                files_to_delete.append(query_result[0])
+
+        # Delete all marked files and directories from virtual file system
+        # TODO delete actual files from disk and error rollback
+        try:
+            for file in files_to_delete:
+                query = "DELETE FROM Files WHERE id = :file_id"
+                query_parameters = {"file_id": file[0]}
+                cursor.execute(query, query_parameters)
+        except sqlite3.Error as e:
+            print(f"An Error Occurred - {e}")
+            result = False
+
+        try:
+            for directory in directories_to_delete:
+                query = "DELETE FROM Directories WHERE id = :directory_id"
+                query_parameters = {"directory_id": directory}
+        except sqlite3.Error as e:
+            print(f"An Error Occurred - {e}")
+            result = False
+
+        cursor.close()
+        conn.commit()
+        conn.close()
+        return result
+
+
+
+def get_file(path):
+    conn = db_connect(db_filename)
+    if conn is None:
+        return None
+
+    cursor = conn.cursor()
+
 
 def add_file():
     pass
