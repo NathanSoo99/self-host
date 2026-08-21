@@ -4,7 +4,7 @@ import uuid
 
 from . import db_filename
 from .database_access import db_connect
-from .os_file_system import create_file
+from .os_file_system import os_get_file, os_create_file, os_delete_file
 
 
 def traverse_directories(directory_chain, cursor):
@@ -79,7 +79,7 @@ def get_file_metadata(virtual_path, cursor):
                 "id": query_result[0],
                 "directory_id": query_result[1],
                 "name": query_result[2],
-                "uuid": query_result[3]
+                "uuid": str(uuid.UUID(bytes=query_result[3]))
             }
 
     return result
@@ -243,8 +243,6 @@ def delete_directory(virtual_path):
         conn.close()
         return result
 
-
-
 def get_file(path):
     conn = db_connect(db_filename)
     if conn is None:
@@ -255,7 +253,7 @@ def get_file(path):
     cursor = conn.cursor()
     file_metadata = get_file_metadata(path, cursor)
     if file_metadata is not None:
-        result = file_metadata
+        result = os_get_file(file_metadata["uuid"])
 
     cursor.close()
     conn.close()
@@ -271,8 +269,7 @@ def add_file(directory_path, filename, content):
     directory_id = get_directory_id(directory_path, cursor)
     if directory_id is not None:
         file_identifier = uuid.uuid4()
-        # TODO write content to os file system with file identifier
-        create_file(file_identifier, content)
+        os_create_file(file_identifier, content)
         query = "INSERT INTO Files (directory_id, name, uuid) VALUES (:directory_id, :name, :uuid) RETURNING *"
         query_data = {
             "directory_id": directory_id,
@@ -337,7 +334,7 @@ def delete_file(path):
     cursor = conn.cursor()
     file_metadata = get_file_metadata(path, cursor)
     if file_metadata is not None:
-        # TODO delete from os filesystem
+        os_delete_file(file_metadata["uuid"])
         query = "DELETE FROM Files WHERE id = :file_id"
         query_parameters = {"file_id": file_metadata["id"]}
         cursor.execute(query, query_parameters)

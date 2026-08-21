@@ -2,19 +2,20 @@ import os
 
 CHUNK_SIZE = 1024
 
-def get_file(uuid):
+def os_get_file(uuid):
     dirname = os.path.dirname(__file__)
     store_path = os.path.join(dirname, f"../../storage/{uuid}")
     result = None
+    print(store_path)
     try:
-        with open(store_path, "r") as file:
+        with open(store_path, "rb") as file:
             result = file.read()
     except FileNotFoundError:
         print("File Content Missing")
     return result
         
 
-def create_file(uuid, content):
+def os_create_file(uuid, content):
     dirname = os.path.dirname(__file__)
     store_path = os.path.join(dirname, f"../../storage/{uuid}")
     result = True
@@ -28,10 +29,10 @@ def create_file(uuid, content):
     return result
 
 
-def modify_file(uuid, content):
+def os_modify_file(uuid, content):
     pass
 
-def delete_file(uuid):
+def os_delete_file(uuid):
     dirname = os.path.dirname(__file__)
     store_path = os.path.join(dirname, f"../../storage/{uuid}")
     try:

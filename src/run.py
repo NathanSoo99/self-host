@@ -1,6 +1,6 @@
 from app import app, db_filename
-from app.virtual_file_system import get_directory, create_directory
-from app.virtual_file_system import add_file
+from app.virtual_file_system import get_directory, create_directory, delete_directory
+from app.virtual_file_system import get_file, add_file, delete_file
 
 import sqlite3
 
@@ -63,5 +63,11 @@ if __name__ == "__main__":
             print(get_directory(cwd))
         elif args[0] == "mkdir":
             create_directory(cwd, args[1])
+        elif args[0] == "cat":
+            print(get_file(cwd + "/" + args[1]))
+        elif args[0] == "rmf":
+            delete_file(cwd + "/" + args[1])
+        elif args[0] == "rmd":
+            delete_directory(cwd)
         else:
             print("invalid command")

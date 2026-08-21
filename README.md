@@ -11,9 +11,11 @@ cd self-host
 python3 -m venv self-host
 source self-host/bin/activate
 ```
-3. Install dependencies
+3. Install dependencies and create data and storage folders
 ```bash
 pip install -r requirement.txt
+mkdir data
+mkdir storage
 ```
 4. Run program
 ```bash
