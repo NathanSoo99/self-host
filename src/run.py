@@ -1,5 +1,6 @@
 from app import app, db_filename
 from app.virtual_file_system import get_directory, create_directory
+from app.virtual_file_system import add_file
 
 import sqlite3
 
@@ -49,6 +50,8 @@ if __name__ == "__main__":
     except sqlite3.Error as e:
         print(f"An Error Occurred - {e}")
         exit()
+
+    add_file("~", "hi.txt", b"\xfd\xfa\xed\x14")
 
     while True:
         cwd = "~"
