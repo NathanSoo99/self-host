@@ -1,4 +1,5 @@
-from app import app, db_filename
+from app import app
+from app.database_access import db_filename
 from app.virtual_file_system import get_directory, create_directory, delete_directory
 from app.virtual_file_system import get_file, add_file, delete_file
 
@@ -52,6 +53,8 @@ if __name__ == "__main__":
         exit()
 
     add_file("~", "hi.txt", b"\xfd\xfa\xed\x14")
+
+    app.run()
 
     while True:
         cwd = "~"
