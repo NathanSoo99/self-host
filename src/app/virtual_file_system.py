@@ -2,8 +2,7 @@ from collections import deque
 import sqlite3
 import uuid
 
-from . import db_filename
-from .database_access import db_connect
+from .database_access import db_connect, db_filename
 from .os_file_system import os_get_file, os_create_file, os_delete_file
 
 
@@ -223,6 +222,7 @@ def delete_directory(virtual_path):
         # TODO delete actual files from disk and error rollback
         try:
             for file in files_to_delete:
+                os_delete_file(file[1])
                 query = "DELETE FROM Files WHERE id = :file_id"
                 query_parameters = {"file_id": file[0]}
                 cursor.execute(query, query_parameters)
