@@ -321,6 +321,7 @@ def modify_file_name(path, new_name):
             "file_id": file_metadata["id"]
         }
         cursor.execute(query, query_parameters)
+        result = True
     cursor.close()
     conn.commit()
     conn.close()
