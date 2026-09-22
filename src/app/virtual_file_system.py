@@ -219,7 +219,6 @@ def delete_directory(virtual_path):
                 files_to_delete.append(query_result[0])
 
         # Delete all marked files and directories from virtual file system
-        # TODO delete actual files from disk and error rollback
         try:
             for file in files_to_delete:
                 os_delete_file(file[1])
