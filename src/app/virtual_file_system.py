@@ -146,7 +146,7 @@ def create_directory(virtual_path, name):
 
     return result
 
-def modify_directory(virtual_path, old_name, new_name):
+def modify_directory(virtual_path, new_name):
     conn = db_connect(db_filename)
     if conn is None:
         return None
@@ -161,24 +161,23 @@ def modify_directory(virtual_path, old_name, new_name):
             query = """
                 UPDATE Directories
                 SET name = :new_name
-                WHERE parent_id = :parent_id and name = :old_name
+                WHERE id = :directory_id
                 RETURNING *
             """
             query_parameters = {
                 "new_name": new_name,
-                "old_name": old_name,
-                "parent_id": directory_id
+                "directory_id": directory_id
             }
             cursor.execute(query, query_parameters)
-            query_results = cursor.fetchall()
-            if len(query_results) == 1:
-                result = query_results[0]
+            query_results = cursor.fetchone()
+            result = query_results[0]
         except sqlite3.IntegrityError as e:
             print(f"Integrity Error - {e}")
             result = None
 
     cursor.close()
-    if result is not None: conn.commit()
+    if result is not None:
+        conn.commit()
     conn.close()
 
     return result

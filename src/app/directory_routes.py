@@ -1,5 +1,5 @@
 from flask import Blueprint, request, abort
-from .virtual_file_system import get_directory, create_directory, delete_directory
+from .virtual_file_system import get_directory, create_directory, modify_directory, delete_directory
 
 directories_bp = Blueprint("directories", __name__)
 
@@ -11,11 +11,16 @@ def access_directories(subpath):
             abort(404)
         return result
     elif request.method == "POST":
-        data = request.get_json()
-        result = create_directory(subpath, data.get("directory_name"))
-        print(result)
-        return ("success", 200) if result is not None else ("directory creation failed", 500)
+        directory_name = request.get_json().get("directory_name")
+        if directory_name is not None:
+            return ("success", 200) if create_directory(subpath, directory_name) is not None else ("directory creation failed", 500)
+        else:
+            abort(400)        
     elif request.method == "PUT":
-        return "wow a put request"
+        new_directory_name = request.get_json().get("new_name")
+        if new_directory_name is not None:
+            return ("success", 200) if modify_directory(subpath, new_directory_name) is not None else ("directory rename failed", 500)
+        else:
+            abort(400)
     elif request.method == "DELETE":
         return ("success", 200) if delete_directory(subpath) is True else ("directory deletion failed", 500)
