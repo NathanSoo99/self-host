@@ -11,8 +11,8 @@ def traverse_directories(directory_chain, cursor):
     Take in a list of directories corresponding to a virtual directory's
     path and find the database id of that directory if the path is valid.
     Arguments:
-        directory_chain (list): an ordered list of strings corresponding to a virtual directory's path
-        cursor (Cursor): cursor to the virtual file system database
+        - directory_chain (list): an ordered list of strings corresponding to a virtual directory's path
+        - cursor (Cursor): cursor to the virtual file system database
     Returns:
         integer: The database id of the directory if the path is valid and None otherwise
     """
@@ -20,7 +20,7 @@ def traverse_directories(directory_chain, cursor):
     for directory in directory_chain:
         # Check current directory for contained directories with next name in the path
         query = """
-            SELECT id, parent_id, name
+            SELECT id
             FROM Directories
             WHERE name = :directory
             AND (parent_id = :parent_id OR (parent_id IS NULL AND :parent_id IS NULL))
@@ -34,11 +34,8 @@ def traverse_directories(directory_chain, cursor):
         # Database constraint on parent_id and name mean that there is 0 or 1 results
         # Consequently query_result is either the only result or None (invalid path)
         if query_result is None:
-            current_directory = None
-            break
-        else:
-            current_directory = query_result[0]
-
+            return None
+        current_directory = query_result[0]
     return current_directory
 
 def get_directory_id(virtual_path, cursor):
@@ -55,10 +52,10 @@ def get_directory_id(virtual_path, cursor):
 
 def get_file_metadata(virtual_path, cursor):
     """
-    Take in a file's virtual path get its metadata if it exists
+    Take in a file's virtual path and get its metadata if it exists
     Arguments:
-        virtual_path (string): Virtual path to a file of the form ~/d1/d2/.../filename
-        cursor (Cursor): cursor to the virtual file system database
+        - virtual_path (string): Virtual path to a file of the form ~/d1/d2/.../filename
+        - cursor (Cursor): cursor to the virtual file system database
     Returns:
         dictionary: Python dictionary containing file's metadata
     """
@@ -85,6 +82,15 @@ def get_file_metadata(virtual_path, cursor):
     
 
 def get_directory(virtual_path):
+    """
+    Take in a file's virtual path and get a list of all it contained directories and a list
+    of all its contained files
+    Arguments:
+        - virtual_path (string): Virtual path to a directory of the form ~/d1/d2/.../directory_name
+    Returns:
+        dictionary: Python dictionary containing a list of contained directories and a list
+        of contained files otherwise None if directory does not exist
+    """
     conn = db_connect(db_filename)
     if conn is None:
         return None
@@ -97,22 +103,23 @@ def get_directory(virtual_path):
         "files": []
     }
 
-    if directory_id is not None:
-        query = "SELECT name FROM Directories WHERE parent_id = :parent_id"
-        query_parameters = {"parent_id": directory_id}
-        cursor.execute(query, query_parameters)
-        query_results = cursor.fetchall()
-        for query_result in query_results:
-            results["directories"].append(query_result[0])
+    # if directory does not exist then return None
+    if directory_id is None:
+        return None
+    
+    query = "SELECT name FROM Directories WHERE parent_id = :parent_id"
+    query_parameters = {"parent_id": directory_id}
+    cursor.execute(query, query_parameters)
+    query_results = cursor.fetchall()
+    for query_result in query_results:
+        results["directories"].append(query_result[0])
 
-        query = "SELECT name FROM Files WHERE directory_id = :directory_id"
-        query_parameters = {"directory_id": directory_id}
-        cursor.execute(query, query_parameters)
-        query_results = cursor.fetchall()
-        for query_result in query_results:
-            results["files"].append(query_result[0])
-    else:
-        results = None
+    query = "SELECT name FROM Files WHERE directory_id = :directory_id"
+    query_parameters = {"directory_id": directory_id}
+    cursor.execute(query, query_parameters)
+    query_results = cursor.fetchall()
+    for query_result in query_results:
+        results["files"].append(query_result[0])
 
     cursor.close()
     conn.close()
@@ -120,10 +127,19 @@ def get_directory(virtual_path):
     return results
 
 def create_directory(virtual_path, name):
+    """
+    Create a new directory within a specified directory
+    Arguments:
+        - virtual_path (string): Virtual path to a directory of the form ~/d1/d2/.../directory_name
+        which will contain the new directory
+    Returns:
+        integer: new directory id if successful and None otherwise
+    """
     conn = db_connect(db_filename)
     if conn is None:
         return None
 
+    # enforce foreign key constraints
     conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
 
@@ -132,13 +148,16 @@ def create_directory(virtual_path, name):
 
     if directory_id is not None:
         try:
-            query = "INSERT INTO Directories (parent_id, name) VALUES (:parent_id, :name) RETURNING *"
+            query = "INSERT INTO Directories (parent_id, name) VALUES (:parent_id, :name) RETURNING id"
             query_parameters = {"parent_id": directory_id, "name": name}
             cursor.execute(query, query_parameters)
-            result = cursor.fetchone()
+            query_result = cursor.fetchone()
+            if query_result is None:
+                return None
+            result = query_result
         except sqlite3.IntegrityError as e:
             print(f"Integrity Error - {e}")
-            result = None
+            return None
 
     cursor.close()
     if result is not None: conn.commit()
@@ -147,6 +166,8 @@ def create_directory(virtual_path, name):
     return result
 
 def modify_directory(virtual_path, new_name):
+    """
+    """
     conn = db_connect(db_filename)
     if conn is None:
         return None
@@ -342,20 +363,3 @@ def delete_file(path):
     conn.commit()
     conn.close()
     return result
-
-"""
-    row = cursor.fetchone()
-    directory_id = row[0]
-
-    file_identifier = uuid.uuid4().bytes
-
-    query = "INSERT INTO Files (directory_id, name, uuid) VALUES (:directory_id, :name, :uuid) RETURNING *"
-    query_data = {
-        "directory_id": directory_id,
-        "name": "file 1",
-        "uuid": file_identifier
-    }
-    cursor.execute(query, query_data)
-    result = cursor.fetchone()
-    print(f"id: {result[0]}, directory_id: {result[1]}, name: {result[2]}, uuid: {str(uuid.UUID(bytes=result[3]))}")
-"""

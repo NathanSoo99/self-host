@@ -56,6 +56,7 @@ if __name__ == "__main__":
 
     app.run()
 
+    # TODO remove (local testing menu which doesn't run during normal server operation)
     while True:
         cwd = "~"
         cmd = input(f"{cwd}$ ")
