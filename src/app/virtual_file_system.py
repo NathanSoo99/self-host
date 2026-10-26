@@ -130,8 +130,9 @@ def create_directory(virtual_path, name):
     """
     Create a new directory within a specified directory
     Arguments:
-        - virtual_path (string): Virtual path to a directory of the form ~/d1/d2/.../directory_name
+        - virtual_path (string): Virtual path to a directory of the form ~/d1/d2/.../parent_directory
         which will contain the new directory
+        - name (string): Name of the directory to be created within the directory specified by virtual_path
     Returns:
         integer: new directory id if successful and None otherwise
     """
@@ -167,6 +168,12 @@ def create_directory(virtual_path, name):
 
 def modify_directory(virtual_path, new_name):
     """
+    Change the name of a specified directory
+    Arguments:
+        - virtual_path (string): Virtual path to a directory of the form ~/d1/d1/.../directory_name
+        - new_name (string): Name to update directory_name to
+    Returns:
+        string: Echos new_name if update is successful, otherwise None
     """
     conn = db_connect(db_filename)
     if conn is None:
@@ -183,7 +190,7 @@ def modify_directory(virtual_path, new_name):
                 UPDATE Directories
                 SET name = :new_name
                 WHERE id = :directory_id
-                RETURNING *
+                RETURNING name
             """
             query_parameters = {
                 "new_name": new_name,
@@ -191,20 +198,28 @@ def modify_directory(virtual_path, new_name):
             }
             cursor.execute(query, query_parameters)
             query_results = cursor.fetchone()
+            if query_results is None:
+                return None
             result = query_results[0]
         except sqlite3.IntegrityError as e:
             print(f"Integrity Error - {e}")
-            result = None
+            return None
 
     cursor.close()
-    if result is not None:
-        conn.commit()
+    conn.commit()
     conn.close()
 
     return result
 
 
 def delete_directory(virtual_path):
+    """
+    Delete a directory and all contained files and sub-directories
+    Arguments:
+        - virtual_path (string): virtual path to directory which is to be deleted
+    Returns:
+        boolean: True if deletion is successful, None otherwise
+    """
     conn = db_connect(db_filename)
     if conn is None:
         return None
@@ -213,54 +228,55 @@ def delete_directory(virtual_path):
 
     result = True
     directory_id = get_directory_id(virtual_path, cursor)
+    if directory_id is None:
+        return None
 
-    if directory_id is not None:
-        directories_to_delete = []
-        files_to_delete = []
-        queue = deque()
+    directories_to_delete = []
+    files_to_delete = []
+    queue = deque()
 
-        # Mark Directory, Sub-directories and Sub-files for deletion
-        queue.append(directory_id)
-        directories_to_delete.append(directory_id)
-        while len(queue) != 0:
-            node_id = queue.popleft()
-            query = "SELECT id FROM Directories WHERE parent_id = :parent_id"
-            query_parameters = {"parent_id": node_id}
+    # Mark Directory, Sub-directories and Sub-files for deletion using breadth first search
+    queue.append(directory_id)
+    directories_to_delete.append(directory_id)
+    while len(queue) != 0:
+        node_id = queue.popleft()
+        query = "SELECT id FROM Directories WHERE parent_id = :parent_id"
+        query_parameters = {"parent_id": node_id}
+        cursor.execute(query, query_parameters)
+        query_results = cursor.fetchall()
+        for query_result in query_results:
+            queue.append(query_result[0])
+            directories_to_delete.append(query_result[0])
+
+        query = "SELECT id, uuid FROM Files WHERE directory_id = :parent_id"
+        cursor.execute(query, query_parameters)
+        query_results = cursor.fetchall()
+        for query_result in query_results:
+            files_to_delete.append(query_result[0])
+
+    # Delete all marked files and directories from virtual file system
+    try:
+        for file in files_to_delete:
+            os_delete_file(file[1])
+            query = "DELETE FROM Files WHERE id = :file_id"
+            query_parameters = {"file_id": file[0]}
             cursor.execute(query, query_parameters)
-            query_results = cursor.fetchall()
-            for query_result in query_results:
-                queue.append(query_result[0])
-                directories_to_delete.append(query_result[0])
+    except sqlite3.Error as e:
+        print(f"An Error Occurred - {e}")
+        return None
 
-            query = "SELECT id, uuid FROM Files WHERE directory_id = :parent_id"
-            cursor.execute(query, query_parameters)
-            query_results = cursor.fetchall()
-            for query_result in query_results:
-                files_to_delete.append(query_result[0])
+    try:
+        for directory in directories_to_delete:
+            query = "DELETE FROM Directories WHERE id = :directory_id"
+            query_parameters = {"directory_id": directory}
+    except sqlite3.Error as e:
+        print(f"An Error Occurred - {e}")
+        return None
 
-        # Delete all marked files and directories from virtual file system
-        try:
-            for file in files_to_delete:
-                os_delete_file(file[1])
-                query = "DELETE FROM Files WHERE id = :file_id"
-                query_parameters = {"file_id": file[0]}
-                cursor.execute(query, query_parameters)
-        except sqlite3.Error as e:
-            print(f"An Error Occurred - {e}")
-            result = False
-
-        try:
-            for directory in directories_to_delete:
-                query = "DELETE FROM Directories WHERE id = :directory_id"
-                query_parameters = {"directory_id": directory}
-        except sqlite3.Error as e:
-            print(f"An Error Occurred - {e}")
-            result = False
-
-        cursor.close()
-        conn.commit()
-        conn.close()
-        return result
+    cursor.close()
+    conn.commit()
+    conn.close()
+    return result
 
 def get_file(path):
     conn = db_connect(db_filename)
