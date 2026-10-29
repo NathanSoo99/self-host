@@ -278,7 +278,15 @@ def delete_directory(virtual_path):
     conn.close()
     return result
 
-def get_file(path):
+def get_file(virtual_path):
+    """
+    Get the contents of a file
+    Arguments:
+        - virtual_path (string): virtual path to file which is to be read
+        in the form ~/d1/d2/../filename
+    Returns:
+        bytes: the file content in bytes
+    """
     conn = db_connect(db_filename)
     if conn is None:
         return None
@@ -286,7 +294,7 @@ def get_file(path):
     result = None
 
     cursor = conn.cursor()
-    file_metadata = get_file_metadata(path, cursor)
+    file_metadata = get_file_metadata(virtual_path, cursor)
     if file_metadata is not None:
         result = os_get_file(file_metadata["uuid"])
 
